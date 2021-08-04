@@ -5,6 +5,7 @@ import pandas as pd
 import geopandas as gpd
 import xarray as xr
 import rasterio.features as rio_features
+import rasterio.transform as rio_transform
 import pygeoutils as geoutils
 
 import definitions
@@ -84,9 +85,24 @@ class MyTestCase(unittest.TestCase):
 
         read_path = os.path.join(self.save_dir, basin_id + "_2000_01_01-03_from_urls.nc")
         ds = xr.open_dataset(read_path)
+
         ds_dims = ("y", "x")
-        transform, width, height = geoutils.pygeoutils._get_transform(ds, ds_dims)
-        _geometry = geoutils.pygeoutils._geo2polygon(geometry, "epsg:4326", ds.crs)
+        xdim, ydim = "x", "y"
+        height, width = ds.sizes[ydim], ds.sizes[xdim]
+
+        left, right = ds[xdim].min().item(), ds[xdim].max().item()
+        bottom, top = ds[ydim].min().item(), ds[ydim].max().item()
+
+        x_res = abs(left - right) / (width - 1)
+        y_res = abs(top - bottom) / (height - 1)
+
+        left -= x_res * 0.5
+        right += x_res * 0.5
+        top += y_res * 0.5
+        bottom -= y_res * 0.5
+
+        transform = rio_transform.from_bounds(left, bottom, right, top, width, height)
+        _geometry = geoutils.geo2polygon(geometry, "epsg:4326", ds.crs)
 
         _mask = rio_features.geometry_mask([_geometry], (height, width), transform, invert=True)
         # x - column, y - row
